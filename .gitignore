@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+*.egg-info/
+*.egg
+
+# Data
+data/*.csv
+data/*.html
+data/*.pkl
+
+# Notebooks
+notebooks/*.ipynb_checkpoints/
+
+# Environment
+.env
+*.env
+
+# Docker
+*.log
+docker-compose.override.yml
+
+# IDE and Editor
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Flask and Database
+instance/
+*.sqlite
+*.db
+
+# Testing and Coverage
+.coverage
+coverage.xml
+*.pytest_cache/
