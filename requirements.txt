@@ -1,0 +1,15 @@
+yfinance
+pandas
+numpy
+matplotlib
+plotly
+backtrader
+tensorflow
+keras
+scipy
+pytest
+flask
+sqlalchemy
+psycopg2-binary
+apscheduler
+retrying
