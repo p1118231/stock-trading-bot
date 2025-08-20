@@ -27,19 +27,23 @@ Fetch data: python src/fetch_data.py
 Analyze data: python src/analyze.py
 Backtest strategy: python src/backtest.py
 Visualize results: python src/visualize.py
+Predict prices: python src/ml_predict.py
+Optimize parameters: python src/optimize.py
 
 
 
 Project Structure
 
 src/:
-fetch_data.py: Fetches historical and real-time stock data using yfinance.
-analyze.py: Calculates SMA, RSI, and trading signals.
+fetch_data.py: Fetches historical and real-time stock data using yfinance with retries.
+analyze.py: Calculates SMA, RSI, and trading signals, enhanced with LSTM predictions.
 backtest.py: Simulates trading with backtrader, including stop-loss and take-profit.
 visualize.py: Creates interactive Plotly charts for prices, signals, and performance.
+ml_predict.py: Predicts future stock prices using LSTM.
+optimize.py: Optimizes SMA window parameters for maximum returns.
 
 
-data/: Stores stock data and visualizations (ignored by .gitignore).
+data/: Stores stock data, predictions, and visualizations (ignored by .gitignore).
 tests/: Unit tests for reliability.
 notebooks/: Exploratory data analysis.
 app/: Flask web app for deployment.
@@ -48,10 +52,12 @@ Notes
 
 Added .gitignore to exclude venv/, data files, and artifacts.
 Removed venv/ from Git history to resolve large file issues.
-Core implementation complete with data fetching, analysis, backtesting, and visualization.
+Core implementation complete with robust data fetching, analysis, backtesting, and visualization.
+Extensions added: LSTM predictions and parameter optimization.
+requirements.txt uses latest package versions for flexibility.
 
 Next Steps
 
-Implement machine learning predictions (ml_predict.py).
-Optimize strategy parameters (optimize.py).
-Add unit tests and deploy with Docker.
+Add unit tests (tests/).
+Integrate results into Flask app for web display.
+Deploy with Docker.
