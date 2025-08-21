@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, send_from_directory
 import pandas as pd
 import os
 import plotly
@@ -12,6 +12,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    return send_from_directory('static', filename)
 
 @app.route('/')
 def index():
@@ -47,6 +51,9 @@ def index():
         if df.empty:
             logger.error(f"All rows in signals.csv contain NaN values in required columns.")
             return "Error: No valid data in signals.csv after removing NaN values."
+        if len(df) < 10:
+            logger.error(f"Too few valid rows ({len(df)}) after dropping NaN values.")
+            return f"Error: Too few valid rows ({len(df)}) in signals.csv for plotting."
         if len(df) < original_len:
             logger.warning(f"Dropped {original_len - len(df)} rows with NaN values.")
 
@@ -93,7 +100,7 @@ def index():
         
         # Convert to JSON for rendering
         graphJSON = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
-        logger.info("Chart JSON generated successfully.")
+        logger.info(f"Chart JSON generated successfully with {len(df)} valid rows.")
         
         return render_template('index.html', graphJSON=graphJSON)
     except Exception as e:
