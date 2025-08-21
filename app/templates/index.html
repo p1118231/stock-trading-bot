@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Stock Trading Bot</title>
+    <script src="https://cdn.plotly.com/plotly-latest.min.js"></script>
+    <style>
+        body {
+            background-color: white;
+            color: black;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        #chart {
+            width: 100%;
+            height: 600px;
+        }
+        .error {
+            color: red;
+            text-align: center;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Stock Trading Bot: AAPL Analysis</h1>
+    <div id="chart"></div>
+    <script>
+        try {
+            var graph = {{ graphJSON | safe }};
+            Plotly.newPlot('chart', graph.data, graph.layout);
+        } catch (e) {
+            console.error('Error rendering chart:', e);
+            document.getElementById('chart').innerHTML = '<p class="error">Error rendering chart. Please ensure analyze.py has been run and signals.csv contains valid data (Close, SMA_50, SMA_200, Signal columns). Check server logs for details.</p>';
+        }
+    </script>
+</body>
+</html>
