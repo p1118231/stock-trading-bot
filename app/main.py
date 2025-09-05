@@ -1,4 +1,5 @@
-from flask import Flask, render_template, send_from_directory
+from flask import Blueprint, render_template, request, jsonify
+from . import db
 import pandas as pd
 import os
 import plotly
@@ -6,18 +7,22 @@ import plotly.graph_objects as go
 import json
 import logging
 import numpy as np
+from datetime import datetime
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+main = Blueprint('main', __name__)
 
-@app.route('/static/<path:filename>')
-def static_files(filename):
-    return send_from_directory('static', filename)
+class Trade(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    ticker = db.Column(db.String(10), nullable=False)
+    signal = db.Column(db.Integer, nullable=False)  # 1: Buy, -1: Sell, 0: Hold
+    price = db.Column(db.Float, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
-@app.route('/')
+@main.route('/', methods=['GET', 'POST'])
 def index():
     try:
         # Check if signals.csv exists
@@ -26,8 +31,8 @@ def index():
             logger.error(f"{signals_file} not found. Run analyze.py first.")
             return "Error: Please run analyze.py to generate signals.csv."
 
-        # Load signals data with explicit datetime parsing
-        df = pd.read_csv(signals_file, index_col='Date', parse_dates=['Date'])
+        # Load signals data
+        df = pd.read_csv(signals_file, index_col='Date', parse_dates=True)
         if df.empty:
             logger.error("signals.csv is empty.")
             return "Error: signals.csv is empty."
@@ -102,10 +107,34 @@ def index():
         graphJSON = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
         logger.info(f"Chart JSON generated successfully with {len(df)} valid rows.")
         
-        return render_template('index.html', graphJSON=graphJSON)
+        # Get trade logs from database
+        trades = Trade.query.all()
+        return render_template('index.html', graphJSON=graphJSON, trades=trades)
     except Exception as e:
         logger.error(f"Error in Flask app: {e}")
         return f"Error: {str(e)}"
 
-if __name__ == '__main__':
-    app.run(debug=True)
+@main.route('/save_trade', methods=['POST'])
+def save_trade():
+    try:
+        ticker = request.json['ticker']
+        signal = request.json['signal']
+        price = request.json['price']
+        
+        trade = Trade(ticker=ticker, signal=signal, price=price)
+        db.session.add(trade)
+        db.session.commit()
+        logger.info(f"Saved trade: {ticker}, {signal}, {price}")
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        logger.error(f"Error saving trade: {e}")
+        return jsonify({'status': 'error'})
+
+@main.route('/static/<path:filename>')
+def static_files(filename):
+    try:
+        logger.info(f"Serving static file: {filename}")
+        return send_from_directory('static', filename)
+    except Exception as e:
+        logger.error(f"Error serving static file {filename}: {e}")
+        return "Static file not found", 404

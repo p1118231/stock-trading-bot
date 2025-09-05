@@ -2,7 +2,7 @@
 <html>
 <head>
     <title>Stock Trading Bot</title>
-    <script src="https://cdn.plotly.com/plotly-latest.min.js"></script>
+    <script src="/static/plotly.min.js"></script>
     <style>
         body {
             background-color: white;
@@ -23,19 +23,54 @@
             text-align: center;
             font-size: 18px;
         }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+        }
     </style>
 </head>
 <body>
     <h1>Stock Trading Bot: AAPL Analysis</h1>
     <div id="chart"></div>
     <script>
-        try {
-            var graph = {{ graphJSON | safe }};
-            Plotly.newPlot('chart', graph.data, graph.layout);
-        } catch (e) {
-            console.error('Error rendering chart:', e);
-            document.getElementById('chart').innerHTML = '<p class="error">Error rendering chart. Please ensure analyze.py has been run and signals.csv contains valid data (Close, SMA_50, SMA_200, Signal columns). Check server logs for details.</p>';
+        if (typeof Plotly === 'undefined') {
+            document.getElementById('chart').innerHTML = '<p class="error">Error: Plotly library failed to load. Ensure plotly.min.js is in app/static/ and accessible.</p>';
+        } else {
+            try {
+                var graph = {{ graphJSON | safe }};
+                console.log('Graph data:', graph);
+                Plotly.newPlot('chart', graph.data, graph.layout);
+            } catch (e) {
+                console.error('Error rendering chart:', e);
+                console.error('Graph JSON:', {{ graphJSON | safe }});
+                document.getElementById('chart').innerHTML = '<p class="error">Error rendering chart. Check the browser console (right-click > Inspect > Console) for details. Ensure analyze.py has been run and signals.csv contains valid data.</p>';
+            }
         }
     </script>
+    <h2>Trade Logs</h2>
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Ticker</th>
+            <th>Signal</th>
+            <th>Price</th>
+            <th>Timestamp</th>
+        </tr>
+        {% for trade in trades %}
+        <tr>
+            <td>{{ trade.id }}</td>
+            <td>{{ trade.ticker }}</td>
+            <td>{{ trade.signal }}</td>
+            <td>{{ trade.price }}</td>
+            <td>{{ trade.timestamp }}</td>
+        </tr>
+        {% endfor %}
+    </table>
 </body>
 </html>
