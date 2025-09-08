@@ -7,15 +7,18 @@ scheduler = BackgroundScheduler()
 
 def create_app():
     app = Flask(__name__)
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///trades.db'  # SQLite for simplicity
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///trades.db'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
     db.init_app(app)
-    scheduler.start()
+
+    # Start scheduler only if not running
+    if not scheduler.running:
+        scheduler.start()
 
     with app.app_context():
-        from .main import main  # Import blueprint
+        from .main import main
         app.register_blueprint(main)
-        db.create_all()  # Create database tables
+        db.create_all()
 
     return app
