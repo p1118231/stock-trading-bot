@@ -3,74 +3,124 @@
 <head>
     <title>Stock Trading Bot</title>
     <script src="/static/plotly.min.js"></script>
-    <style>
-        body {
-            background-color: white;
-            color: black;
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-        }
-        h1 {
-            text-align: center;
-        }
-        #chart {
-            width: 100%;
-            height: 600px;
-        }
-        .error {
-            color: red;
-            text-align: center;
-            font-size: 18px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        th, td {
-            border: 1px solid black;
-            padding: 8px;
-            text-align: left;
-        }
-    </style>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <h1>Stock Trading Bot: AAPL Analysis</h1>
-    <div id="chart"></div>
-    <script>
-        if (typeof Plotly === 'undefined') {
-            document.getElementById('chart').innerHTML = '<p class="error">Error: Plotly library failed to load. Ensure plotly.min.js is in app/static/ and accessible.</p>';
-        } else {
-            try {
-                var graph = {{ graphJSON | safe }};
-                console.log('Graph data:', graph);
-                Plotly.newPlot('chart', graph.data, graph.layout);
-            } catch (e) {
-                console.error('Error rendering chart:', e);
-                console.error('Graph JSON:', {{ graphJSON | safe }});
-                document.getElementById('chart').innerHTML = '<p class="error">Error rendering chart. Check the browser console (right-click > Inspect > Console) for details. Ensure analyze.py has been run and signals.csv contains valid data.</p>';
+<body class="bg-gray-100 font-sans">
+    <div class="container mx-auto p-6">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Stock Trading Bot: AAPL Analysis</h1>
+        <div id="chart" class="w-full h-[600px] bg-white shadow-md rounded-lg"></div>
+        <div id="error" class="text-red-600 text-center text-lg mt-4 hidden"></div>
+        <script>
+            if (typeof Plotly === 'undefined') {
+                document.getElementById('chart').innerHTML = '<p class="text-red-600 text-center text-lg">Error: Plotly library failed to load. Ensure plotly.min.js is in app/static/ and accessible.</p>';
+            } else {
+                try {
+                    var graph = {{ graphJSON | safe }};
+                    console.log('Graph data:', graph);
+                    Plotly.newPlot('chart', graph.data, graph.layout);
+                } catch (e) {
+                    console.error('Error rendering chart:', e);
+                    console.error('Graph JSON:', {{ graphJSON | safe }});
+                    document.getElementById('chart').innerHTML = '<p class="text-red-600 text-center text-lg">Error rendering chart. Check the browser console (right-click > Inspect > Console) for details. Ensure analyze.py has been run and signals.csv contains valid data.</p>';
+                }
             }
-        }
-    </script>
-    <h2>Trade Logs</h2>
-    <table>
-        <tr>
-            <th>ID</th>
-            <th>Ticker</th>
-            <th>Signal</th>
-            <th>Price</th>
-            <th>Timestamp</th>
-        </tr>
-        {% for trade in trades %}
-        <tr>
-            <td>{{ trade.id }}</td>
-            <td>{{ trade.ticker }}</td>
-            <td>{{ trade.signal }}</td>
-            <td>{{ trade.price }}</td>
-            <td>{{ trade.timestamp }}</td>
-        </tr>
-        {% endfor %}
-    </table>
+        </script>
+        <h2 class="text-2xl font-semibold text-center text-gray-800 mt-8 mb-4">Trade Logs</h2>
+        <table id="tradeTable" class="w-full border-collapse bg-white shadow-md rounded-lg">
+            <thead>
+                <tr class="bg-gray-200">
+                    <th class="border border-gray-300 p-3 text-left">ID</th>
+                    <th class="border border-gray-300 p-3 text-left">Ticker</th>
+                    <th class="border border-gray-300 p-3 text-left">Signal</th>
+                    <th class="border border-gray-300 p-3 text-left">Price</th>
+                    <th class="border border-gray-300 p-3 text-left">Timestamp</th>
+                </tr>
+            </thead>
+            <tbody id="tradeTableBody">
+                {% for trade in trades %}
+                <tr>
+                    <td class="border border-gray-300 p-3">{{ trade.id }}</td>
+                    <td class="border border-gray-300 p-3">{{ trade.ticker }}</td>
+                    <td class="border border-gray-300 p-3">{{ trade.signal }}</td>
+                    <td class="border border-gray-300 p-3">{{ trade.price }}</td>
+                    <td class="border border-gray-300 p-3">{{ trade.timestamp }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <h2 class="text-2xl font-semibold text-center text-gray-800 mt-8 mb-4">Add Trade</h2>
+        <form id="tradeForm" class="flex justify-center space-x-4 mb-6">
+            <div>
+                <label for="ticker" class="block text-gray-700">Ticker:</label>
+                <input type="text" id="ticker" name="ticker" value="AAPL" required class="border border-gray-300 p-2 rounded-md">
+            </div>
+            <div>
+                <label for="signal" class="block text-gray-700">Signal:</label>
+                <select id="signal" name="signal" required class="border border-gray-300 p-2 rounded-md">
+                    <option value="1">Buy</option>
+                    <option value="-1">Sell</option>
+                    <option value="0">Hold</option>
+                </select>
+            </div>
+            <div>
+                <label for="price" class="block text-gray-700">Price:</label>
+                <input type="number" id="price" name="price" step="0.01" required class="border border-gray-300 p-2 rounded-md">
+            </div>
+            <button type="submit" class="bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700">Add Trade</button>
+        </form>
+        <div id="formFeedback" class="text-center text-lg mt-4 hidden"></div>
+        <script>
+            document.getElementById('tradeForm').addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const ticker = document.getElementById('ticker').value.trim();
+                const signal = parseInt(document.getElementById('signal').value);
+                const price = parseFloat(document.getElementById('price').value);
+                const feedback = document.getElementById('formFeedback');
+
+                if (!ticker || isNaN(signal) || isNaN(price) || price <= 0) {
+                    feedback.classList.remove('hidden', 'text-green-600');
+                    feedback.classList.add('text-red-600');
+                    feedback.textContent = 'Please provide valid ticker, signal, and positive price.';
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/save_trade', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ticker, signal, price })
+                    });
+                    const result = await response.json();
+                    feedback.classList.remove('hidden');
+                    if (result.status === 'success') {
+                        feedback.classList.remove('text-red-600');
+                        feedback.classList.add('text-green-600');
+                        feedback.textContent = 'Trade saved successfully!';
+                        // Update table dynamically
+                        const tableBody = document.getElementById('tradeTableBody');
+                        const newRow = document.createElement('tr');
+                        newRow.innerHTML = `
+                            <td class="border border-gray-300 p-3">${result.trade_id}</td>
+                            <td class="border border-gray-300 p-3">${ticker}</td>
+                            <td class="border border-gray-300 p-3">${signal}</td>
+                            <td class="border border-gray-300 p-3">${price.toFixed(2)}</td>
+                            <td class="border border-gray-300 p-3">${new Date().toISOString().replace('T', ' ').slice(0, 19)}</td>
+                        `;
+                        tableBody.appendChild(newRow);
+                        document.getElementById('tradeForm').reset();
+                    } else {
+                        feedback.classList.remove('text-green-600');
+                        feedback.classList.add('text-red-600');
+                        feedback.textContent = `Error saving trade: ${result.message}`;
+                    }
+                } catch (e) {
+                    console.error('Error saving trade:', e);
+                    feedback.classList.remove('hidden', 'text-green-600');
+                    feedback.classList.add('text-red-600');
+                    feedback.textContent = 'Error saving trade. Check console.';
+                }
+            });
+        </script>
+    </div>
 </body>
 </html>

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, send_from_directory
 from . import db
 import pandas as pd
 import os
@@ -9,13 +9,14 @@ import logging
 import numpy as np
 from datetime import datetime
 
-# Set up logging
+# Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 main = Blueprint('main', __name__)
 
 class Trade(db.Model):
+    """Database model for trades."""
     id = db.Column(db.Integer, primary_key=True)
     ticker = db.Column(db.String(10), nullable=False)
     signal = db.Column(db.Integer, nullable=False)  # 1: Buy, -1: Sell, 0: Hold
@@ -24,53 +25,47 @@ class Trade(db.Model):
 
 @main.route('/', methods=['GET', 'POST'])
 def index():
+    """Render the main page with stock chart and trade logs."""
     try:
-        # Check if signals.csv exists
         signals_file = 'data/signals.csv'
         if not os.path.exists(signals_file):
             logger.error(f"{signals_file} not found. Run analyze.py first.")
-            return "Error: Please run analyze.py to generate signals.csv."
+            return "Error: Please run analyze.py to generate signals.csv.", 400
 
-        # Load signals data
         df = pd.read_csv(signals_file, index_col='Date', parse_dates=True)
         if df.empty:
             logger.error("signals.csv is empty.")
-            return "Error: signals.csv is empty."
+            return "Error: signals.csv is empty.", 400
 
-        # Validate required columns
         required_columns = ['Close', 'SMA_50', 'SMA_200', 'Signal']
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
             logger.error(f"Missing columns in signals.csv: {missing_columns}")
-            return f"Error: Missing columns in signals.csv: {missing_columns}"
+            return f"Error: Missing columns in signals.csv: {missing_columns}", 400
 
-        # Validate data types and handle NaN values
         for col in required_columns:
             if not pd.api.types.is_numeric_dtype(df[col]):
                 logger.error(f"Column {col} contains non-numeric data.")
-                return f"Error: Column {col} in signals.csv contains non-numeric data."
+                return f"Error: Column {col} in signals.csv contains non-numeric data.", 400
         
-        # Drop rows with NaN in required columns
         original_len = len(df)
         df = df.dropna(subset=required_columns)
         if df.empty:
-            logger.error(f"All rows in signals.csv contain NaN values in required columns.")
-            return "Error: No valid data in signals.csv after removing NaN values."
+            logger.error("All rows in signals.csv contain NaN values in required columns.")
+            return "Error: No valid data in signals.csv after removing NaN values.", 400
         if len(df) < 10:
             logger.error(f"Too few valid rows ({len(df)}) after dropping NaN values.")
-            return f"Error: Too few valid rows ({len(df)}) in signals.csv for plotting."
+            return f"Error: Too few valid rows ({len(df)}) in signals.csv for plotting.", 400
         if len(df) < original_len:
             logger.warning(f"Dropped {original_len - len(df)} rows with NaN values.")
 
-        # Ensure index is datetime
         if not pd.api.types.is_datetime64_any_dtype(df.index):
             logger.warning("Date index is not datetime; attempting to convert")
             df.index = pd.to_datetime(df.index, errors='coerce')
             if df.index.isna().any():
                 logger.error("Failed to convert Date index to datetime.")
-                return "Error: Invalid date format in signals.csv."
+                return "Error: Invalid date format in signals.csv.", 400
 
-        # Create Plotly chart
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=df.index, y=df['Close'], mode='lines', name='Close Price', line=dict(color='blue')))
         fig.add_trace(go.Scatter(x=df.index, y=df['SMA_50'], mode='lines', name='50-day SMA', line=dict(color='orange')))
@@ -86,7 +81,6 @@ def index():
             else:
                 logger.warning("Predicted_Close column contains non-numeric data; skipping.")
 
-        # Add buy/sell signals
         buys = df[df['Signal'] == 1]
         sells = df[df['Signal'] == -1]
         fig.add_trace(go.Scatter(x=buys.index, y=buys['Close'], mode='markers', name='Buy Signal',
@@ -103,38 +97,49 @@ def index():
             paper_bgcolor='white'
         )
         
-        # Convert to JSON for rendering
         graphJSON = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
         logger.info(f"Chart JSON generated successfully with {len(df)} valid rows.")
         
-        # Get trade logs from database
         trades = Trade.query.all()
         return render_template('index.html', graphJSON=graphJSON, trades=trades)
     except Exception as e:
-        logger.error(f"Error in Flask app: {e}")
-        return f"Error: {str(e)}"
+        logger.error(f"Error in Flask app: {str(e)}")
+        return f"Error: {str(e)}", 500
 
 @main.route('/save_trade', methods=['POST'])
 def save_trade():
+    """Save a trade to the database."""
     try:
-        ticker = request.json['ticker']
-        signal = request.json['signal']
-        price = request.json['price']
-        
+        data = request.get_json()
+        ticker = data.get('ticker', '').strip()
+        signal = data.get('signal')
+        price = data.get('price')
+
+        if not ticker:
+            logger.error("Invalid trade: ticker is empty.")
+            return jsonify({'status': 'error', 'message': 'Ticker cannot be empty.'}), 400
+        if signal not in [0, 1, -1]:
+            logger.error(f"Invalid trade: signal {signal} is not 0, 1, or -1.")
+            return jsonify({'status': 'error', 'message': 'Signal must be 0 (Hold), 1 (Buy), or -1 (Sell).'}), 400
+        if not isinstance(price, (int, float)) or price <= 0:
+            logger.error(f"Invalid trade: price {price} is not a positive number.")
+            return jsonify({'status': 'error', 'message': 'Price must be a positive number.'}), 400
+
         trade = Trade(ticker=ticker, signal=signal, price=price)
         db.session.add(trade)
         db.session.commit()
-        logger.info(f"Saved trade: {ticker}, {signal}, {price}")
-        return jsonify({'status': 'success'})
+        logger.info(f"Saved trade: {ticker}, {signal}, {price}, ID: {trade.id}")
+        return jsonify({'status': 'success', 'trade_id': trade.id})
     except Exception as e:
-        logger.error(f"Error saving trade: {e}")
-        return jsonify({'status': 'error'})
+        logger.error(f"Error saving trade: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @main.route('/static/<path:filename>')
 def static_files(filename):
+    """Serve static files like plotly.min.js."""
     try:
         logger.info(f"Serving static file: {filename}")
-        return send_from_directory('static', filename)
+        return send_from_directory(os.path.join(os.path.dirname(__file__), 'static'), filename)
     except Exception as e:
-        logger.error(f"Error serving static file {filename}: {e}")
+        logger.error(f"Error serving static file {filename}: {str(e)}")
         return "Static file not found", 404

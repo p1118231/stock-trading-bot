@@ -4,7 +4,7 @@ import pandas as pd
 import json
 from app import create_app, db
 from app.main import Trade
-from datetime import datetime
+from datetime import datetime, timedelta
 
 class TestFlaskApp(unittest.TestCase):
     def setUp(self):
@@ -27,13 +27,14 @@ class TestFlaskApp(unittest.TestCase):
 
     def test_index_route(self):
         """Test the index route renders correctly."""
-        # Create a sample signals.csv
+        # Create a sample signals.csv with 10 rows
+        dates = [datetime(2023, 1, 1) + timedelta(days=i) for i in range(10)]
         data = {
-            'Date': ['2023-01-01', '2023-01-02'],
-            'Close': [150.0, 151.0],
-            'SMA_50': [149.0, 149.5],
-            'SMA_200': [148.0, 148.5],
-            'Signal': [1, -1]
+            'Date': dates,
+            'Close': [150.0 + i * 0.5 for i in range(10)],
+            'SMA_50': [149.0 + i * 0.5 for i in range(10)],
+            'SMA_200': [148.0 + i * 0.5 for i in range(10)],
+            'Signal': [1 if i % 2 == 0 else -1 for i in range(10)]
         }
         df = pd.DataFrame(data)
         df['Date'] = pd.to_datetime(df['Date'])
@@ -52,7 +53,7 @@ class TestFlaskApp(unittest.TestCase):
             os.remove('data/signals.csv')
         
         response = self.client.get('/')
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 400)
         self.assertIn(b'Error: Please run analyze.py to generate signals.csv', response.data)
 
     def test_save_trade(self):
@@ -64,7 +65,8 @@ class TestFlaskApp(unittest.TestCase):
         }
         response = self.client.post('/save_trade', json=trade_data)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json, {'status': 'success'})
+        self.assertEqual(response.json['status'], 'success')
+        self.assertIn('trade_id', response.json)
 
         with self.app.app_context():
             trade = Trade.query.first()
@@ -75,14 +77,38 @@ class TestFlaskApp(unittest.TestCase):
 
     def test_save_trade_invalid_data(self):
         """Test /save_trade with invalid data."""
+        # Test empty ticker
         trade_data = {
-            'ticker': '',  # Invalid: empty ticker
+            'ticker': '',
             'signal': 1,
             'price': 150.25
         }
         response = self.client.post('/save_trade', json=trade_data)
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json['status'], 'error')
+        self.assertEqual(response.json['message'], 'Ticker cannot be empty.')
+
+        # Test invalid signal
+        trade_data = {
+            'ticker': 'AAPL',
+            'signal': 2,
+            'price': 150.25
+        }
+        response = self.client.post('/save_trade', json=trade_data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json['status'], 'error')
+        self.assertEqual(response.json['message'], 'Signal must be 0 (Hold), 1 (Buy), or -1 (Sell).')
+
+        # Test invalid price
+        trade_data = {
+            'ticker': 'AAPL',
+            'signal': 1,
+            'price': -10
+        }
+        response = self.client.post('/save_trade', json=trade_data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json['status'], 'error')
+        self.assertEqual(response.json['message'], 'Price must be a positive number.')
 
     def test_static_file_serving(self):
         """Test serving plotly.min.js."""
@@ -101,10 +127,21 @@ class TestFlaskApp(unittest.TestCase):
             db.session.add(trade)
             db.session.commit()
 
+        # Create a sample signals.csv with 10 rows
+        dates = [datetime(2023, 1, 1) + timedelta(days=i) for i in range(10)]
+        data = {
+            'Date': dates,
+            'Close': [150.0 + i * 0.5 for i in range(10)],
+            'SMA_50': [149.0 + i * 0.5 for i in range(10)],
+            'SMA_200': [148.0 + i * 0.5 for i in range(10)],
+            'Signal': [1 if i % 2 == 0 else -1 for i in range(10)]
+        }
+        df = pd.DataFrame(data)
+        df['Date'] = pd.to_datetime(df['Date'])
+        os.makedirs('data', exist_ok=True)
+        df.set_index('Date').to_csv('data/signals.csv')
+
         response = self.client.get('/')
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'AAPL', response.data)
         self.assertIn(b'150.25', response.data)
-
-if __name__ == '__main__':
-    unittest.main()
