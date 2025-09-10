@@ -8,8 +8,7 @@ tensorflow
 keras
 scipy
 pytest
-flask
-sqlalchemy
+flask-sqlalchemy
 psycopg2-binary
 apscheduler
 retrying
